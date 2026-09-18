@@ -13,6 +13,7 @@ export default function Home() {
   const [speaking, setSpeaking] = useState(null);
   const [dragActive, setDragActive] = useState(false);
   const [loadingQuiz, setLoadingQuiz] = useState(false);
+  const [isMockData, setIsMockData] = useState(false);
   
   const [loadingMessage, setLoadingMessage] = useState("Analyzing document...");
   const [progress, setProgress] = useState(0);
@@ -65,6 +66,11 @@ export default function Home() {
     setLoadingSample(true);
     try {
       const res = await fetch("/api/generate-sample");
+      if (res.headers.get('X-Is-Mock') === 'true') {
+        setIsMockData(true);
+      } else {
+        setIsMockData(false);
+      }
       const data = await res.json();
       if (res.ok && data.text) {
         setInput(data.text);
@@ -146,6 +152,11 @@ export default function Home() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ text: input, files: files, customInstruction: customInstruction })
       });
+      if (res.headers.get('X-Is-Mock') === 'true') {
+        setIsMockData(true);
+      } else {
+        setIsMockData(false);
+      }
       const data = await res.json();
       if (!res.ok || data.error) {
         alert(data.error || "Server error occurred!");
@@ -198,6 +209,9 @@ export default function Home() {
           originalText 
         })
       });
+      if (res.headers.get('X-Is-Mock') === 'true') {
+        setIsMockData(true);
+      }
       const data = await res.json();
       if (res.ok) {
         setWeakPointsReport(data);
@@ -252,6 +266,9 @@ export default function Home() {
           existingQuestions: result.questions.map(q => q.question) 
         })
       });
+      if (res.headers.get('X-Is-Mock') === 'true') {
+        setIsMockData(true);
+      }
       const newQuestions = await res.json();
       if (res.ok && Array.isArray(newQuestions)) {
         setResult({
@@ -279,6 +296,15 @@ export default function Home() {
           <h1 className="text-5xl font-extrabold text-slate-800 dark:text-slate-100 tracking-tight mb-4">Transform Your Text</h1>
           <p className="text-xl text-slate-600 dark:text-slate-400">Paste your heavy text or upload pages to instantly get clear, bite-sized interactive slides.</p>
         </header>
+      )}
+
+      {isMockData && (
+        <div className="max-w-4xl mx-auto mb-8 animate-in fade-in slide-in-from-top-4 duration-500">
+          <div className="bg-red-50 dark:bg-red-900/20 border-l-4 border-red-500 text-red-700 dark:text-red-400 p-4 rounded-xl shadow-sm font-semibold flex items-center gap-3">
+            <span className="text-2xl flex-shrink-0">⚠️</span>
+            <p>Our AI servers are currently experiencing high demand. We are displaying high-quality sample content for demonstration purposes.</p>
+          </div>
+        </div>
       )}
 
       {/* Main Container - Transitions between centered 1-col to grid 2-col */}

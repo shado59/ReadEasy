@@ -73,6 +73,8 @@ export async function POST(req) {
   } catch (error) {
     console.error("Groq API Error, running MOCK FALLBACK:", error.message);
     await new Promise(res => setTimeout(res, 3500));
-    return Response.json(MOCK_REPORT_DATA[Math.floor(Math.random() * MOCK_REPORT_DATA.length)]);
+    return Response.json(MOCK_REPORT_DATA[Math.floor(Math.random() * MOCK_REPORT_DATA.length)], {
+      headers: { 'X-Is-Mock': 'true' }
+    });
   }
 }

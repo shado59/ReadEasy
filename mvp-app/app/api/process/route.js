@@ -49,7 +49,7 @@ export async function POST(req) {
       You are an engaging and highly helpful assistant for students with dyslexia or those learning English.
       Input text: "${text || "Read the text from the provided images or PDFs"}"
       
-      ${customInstruction ? `SPECIAL INSTRUCTION FROM USER: "${customInstruction}"\nEnsure you follow this instruction strictly while structuring the response.` : ""}
+      ${customInstruction ? \`SPECIAL INSTRUCTION FROM USER: "\${customInstruction}"\\nEnsure you follow this instruction strictly while structuring the response.\` : ""}
       
       Instead of long text, break down the information into logical, bite-sized sections (like slides in a presentation).
       Return a JSON object EXACTLY like this:
@@ -82,17 +82,52 @@ export async function POST(req) {
 
     const groq = new OpenAI({ apiKey, baseURL: "https://api.groq.com/openai/v1" });
 
-    const completion = await groq.chat.completions.create({
-      messages: [{ role: "user", content: prompt }],
-      model: "llama-3.1-8b-instant",
-      response_format: { type: "json_object" },
-    });
+    const hasImage = files && files.length > 0 && files.some(f => f.base64);
+    const selectedModel = hasImage ? "llama-3.2-11b-vision-preview" : "llama-3.3-70b-versatile";
 
-    const data = JSON.parse(completion.choices[0].message.content);
+    let messageContent = prompt;
+    
+    if (hasImage) {
+      messageContent = [{ type: "text", text: prompt }];
+      files.forEach(file => {
+        if (file.base64) {
+          const base64Data = file.base64.includes(',') ? file.base64.split(',')[1] : file.base64;
+          messageContent.push({
+            type: "image_url",
+            image_url: {
+              url: \`data:\${file.mimeType};base64,\${base64Data}\`
+            }
+          });
+        }
+      });
+    }
+
+    const requestOptions = {
+      messages: [{ role: "user", content: messageContent }],
+      model: selectedModel,
+    };
+
+    if (!hasImage) {
+      requestOptions.response_format = { type: "json_object" };
+    }
+
+    const completion = await groq.chat.completions.create(requestOptions);
+
+    let resultText = completion.choices[0].message.content.trim();
+    
+    if (resultText.startsWith("\`\`\`json")) {
+      resultText = resultText.substring(7, resultText.length - 3).trim();
+    } else if (resultText.startsWith("\`\`\`")) {
+      resultText = resultText.substring(3, resultText.length - 3).trim();
+    }
+
+    const data = JSON.parse(resultText);
     return Response.json(data);
   } catch (error) {
     console.error("Groq API Error, running MOCK FALLBACK:", error.message);
     await new Promise(res => setTimeout(res, 3500));
-    return Response.json(MOCK_DATA[Math.floor(Math.random() * MOCK_DATA.length)]);
+    return Response.json(MOCK_DATA[Math.floor(Math.random() * MOCK_DATA.length)], {
+      headers: { 'X-Is-Mock': 'true' }
+    });
   }
 }
