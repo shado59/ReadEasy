@@ -95,7 +95,7 @@ export async function POST(req) {
           messageContent.push({
             type: "image_url",
             image_url: {
-              url: \`data:\${file.mimeType};base64,\${base64Data}\`
+              url: `data:${file.mimeType};base64,${base64Data}`
             }
           });
         }
@@ -115,9 +115,9 @@ export async function POST(req) {
 
     let resultText = completion.choices[0].message.content.trim();
     
-    if (resultText.startsWith("\`\`\`json")) {
+    if (resultText.startsWith("```json")) {
       resultText = resultText.substring(7, resultText.length - 3).trim();
-    } else if (resultText.startsWith("\`\`\`")) {
+    } else if (resultText.startsWith("```")) {
       resultText = resultText.substring(3, resultText.length - 3).trim();
     }
 
