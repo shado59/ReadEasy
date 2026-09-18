@@ -49,7 +49,7 @@ export async function POST(req) {
       You are an engaging and highly helpful assistant for students with dyslexia or those learning English.
       Input text: "${text || "Read the text from the provided images or PDFs"}"
       
-      ${customInstruction ? \`SPECIAL INSTRUCTION FROM USER: "\${customInstruction}"\\nEnsure you follow this instruction strictly while structuring the response.\` : ""}
+      ${customInstruction ? `SPECIAL INSTRUCTION FROM USER: "${customInstruction}"\nEnsure you follow this instruction strictly while structuring the response.` : ""}
       
       Instead of long text, break down the information into logical, bite-sized sections (like slides in a presentation).
       Return a JSON object EXACTLY like this:
