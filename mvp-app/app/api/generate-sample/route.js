@@ -1,10 +1,4 @@
-import { GoogleGenerativeAI } from "@google/generative-ai";
-
-const API_KEYS = [
-  process.env.GEMINI_API_KEY_1,
-  process.env.GEMINI_API_KEY_2,
-  process.env.GEMINI_API_KEY_3
-];
+import OpenAI from "openai";
 
 export async function GET() {
   try {
@@ -15,31 +9,26 @@ export async function GET() {
       Do not include any intro or outro, just the raw text itself.
     `;
 
-    let data = null;
-    let lastError = null;
-
-    for (const key of API_KEYS) {
-      if (!key || key.startsWith("YOUR_")) continue;
-      
-      try {
-        const ai = new GoogleGenerativeAI(key);
-        const model = ai.getGenerativeModel({ model: "gemini-1.5-flash" });
-        
-        const result = await model.generateContent(prompt);
-        data = result.response.text().trim();
-        break; // Success
-      } catch (err) {
-        console.error("Generate Sample API Key failed:", err.message);
-        lastError = err;
-      }
+    const apiKey = process.env.GROQ_API_KEY;
+    if (!apiKey) {
+      throw new Error("GROQ_API_KEY is not set.");
     }
 
-    if (!data) {
-      throw new Error("All API keys failed. Last error: " + (lastError?.message || "Unknown error"));
-    }
+    const groq = new OpenAI({
+      apiKey: apiKey,
+      baseURL: "https://api.groq.com/openai/v1",
+    });
+
+    const completion = await groq.chat.completions.create({
+      messages: [{ role: "user", content: prompt }],
+      model: "llama-3.3-70b-versatile",
+    });
+
+    const data = completion.choices[0].message.content.trim();
 
     return Response.json({ text: data }, { status: 200 });
   } catch (error) {
+    console.error("Groq API Error:", error);
     return Response.json({ error: error.message }, { status: 500 });
   }
 }

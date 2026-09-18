@@ -1,4 +1,4 @@
-import { GoogleGenerativeAI } from "@google/generative-ai";
+import OpenAI from "openai";
 
 export async function POST(req) {
   try {
@@ -8,12 +8,6 @@ export async function POST(req) {
     if (!questions || !userAnswers || !originalText) {
       return Response.json({ error: "Missing required fields" }, { status: 400 });
     }
-
-    const API_KEYS = [
-      process.env.GEMINI_API_KEY_1,
-      process.env.GEMINI_API_KEY_2,
-      process.env.GEMINI_API_KEY_3
-    ];
 
     // Prepare wrong answers context
     const wrongAnswersContext = questions.map((q, idx) => {
@@ -38,47 +32,43 @@ export async function POST(req) {
       2. Re-explain the core concept from the original text in a very simple, easy-to-understand way.
       3. Do NOT make them feel bad. Use an encouraging tone.
 
-      Format your response strictly as a JSON array of objects, where each object has:
+      Format your response strictly as a JSON object with a single key "report" containing an array of objects, where each object has:
       - "topic": A short title of what they misunderstood (e.g. "Photosynthesis Process")
       - "explanation": The gentle explanation and re-teaching of the concept.
 
-      Return ONLY the raw JSON array. No markdown blocks, no extra text.
+      Return ONLY the JSON object like:
+      {
+        "report": [
+          { "topic": "...", "explanation": "..." }
+        ]
+      }
     `;
 
-    let report = null;
-    let lastError = null;
-
-    for (const key of API_KEYS) {
-      if (!key || key.startsWith("YOUR_")) continue;
-
-      try {
-        const ai = new GoogleGenerativeAI(key);
-        const model = ai.getGenerativeModel({ model: "gemini-1.5-flash" });
-
-        const result = await model.generateContent(prompt);
-        let aiText = result.response.text().trim();
-        if (aiText.startsWith("```json")) {
-          aiText = aiText.substring(7, aiText.length - 3).trim();
-        } else if (aiText.startsWith("```")) {
-          aiText = aiText.substring(3, aiText.length - 3).trim();
-        }
-
-        report = JSON.parse(aiText);
-        break; // Success!
-      } catch (err) {
-        console.error("Report API Key failed:", err.message);
-        lastError = err;
-      }
+    const apiKey = process.env.GROQ_API_KEY;
+    if (!apiKey) {
+      throw new Error("GROQ_API_KEY is not set.");
     }
 
-    if (!report) {
-      throw new Error("All API keys failed. Last error: " + (lastError?.message || "Unknown error"));
-    }
+    const groq = new OpenAI({
+      apiKey: apiKey,
+      baseURL: "https://api.groq.com/openai/v1",
+    });
 
-    return Response.json(report);
+    const completion = await groq.chat.completions.create({
+      messages: [{ role: "user", content: prompt }],
+      model: "llama-3.3-70b-versatile",
+      response_format: { type: "json_object" },
+    });
+
+    const resultText = completion.choices[0].message.content;
+    let data = JSON.parse(resultText);
+
+    const finalReport = Array.isArray(data) ? data : (data.report || Object.values(data)[0] || []);
+
+    return Response.json(finalReport);
 
   } catch (error) {
-    console.error(error);
+    console.error("Groq API Error:", error);
     return Response.json({ error: "Failed to generate report." }, { status: 500 });
   }
 }

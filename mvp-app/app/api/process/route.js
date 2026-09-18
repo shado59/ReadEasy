@@ -1,10 +1,4 @@
-import { GoogleGenerativeAI } from "@google/generative-ai";
-
-const API_KEYS = [
-  process.env.GEMINI_API_KEY_1,
-  process.env.GEMINI_API_KEY_2,
-  process.env.GEMINI_API_KEY_3
-];
+import OpenAI from "openai";
 
 export async function POST(req) {
   try {
@@ -42,50 +36,28 @@ export async function POST(req) {
       Provide exactly 3 questions. Ensure the text is structured beautifully.
     `;
 
-    let parts = [prompt];
-
-    if (files && files.length > 0) {
-      files.forEach(file => {
-        if (file.base64) {
-          parts.push({
-            inlineData: {
-              data: file.base64.split(',')[1],
-              mimeType: file.mimeType
-            }
-          });
-        }
-      });
+    const apiKey = process.env.GROQ_API_KEY;
+    if (!apiKey) {
+      throw new Error("GROQ_API_KEY is not set.");
     }
 
-    let data = null;
-    let lastError = null;
+    const groq = new OpenAI({
+      apiKey: apiKey,
+      baseURL: "https://api.groq.com/openai/v1",
+    });
 
-    for (const key of API_KEYS) {
-      if (!key || key.startsWith("YOUR_")) continue;
+    const completion = await groq.chat.completions.create({
+      messages: [{ role: "user", content: prompt }],
+      model: "llama-3.3-70b-versatile",
+      response_format: { type: "json_object" },
+    });
 
-      try {
-        const ai = new GoogleGenerativeAI(key);
-        const model = ai.getGenerativeModel({
-          model: "gemini-1.5-flash",
-          generationConfig: { responseMimeType: "application/json" }
-        });
-
-        const result = await model.generateContent(parts);
-        data = JSON.parse(result.response.text());
-        break; // Success! Break out of the fallback loop
-      } catch (err) {
-        console.error("API Key failed:", err.message);
-        lastError = err;
-        // loop continues to the next key
-      }
-    }
-
-    if (!data) {
-      throw new Error("All API keys failed. Last error: " + (lastError?.message || "Unknown error"));
-    }
+    const resultText = completion.choices[0].message.content;
+    const data = JSON.parse(resultText);
 
     return Response.json(data);
   } catch (error) {
+    console.error("Groq API Error:", error);
     return Response.json({ error: error.message }, { status: 500 });
   }
 }
