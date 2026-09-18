@@ -1,4 +1,4 @@
-import OpenAI from "openai";
+import { GoogleGenerativeAI } from "@google/generative-ai";
 
 const MOCK_DATA = [
   {
@@ -41,6 +41,12 @@ const MOCK_DATA = [
   }
 ];
 
+const API_KEYS = [
+  process.env.GEMINI_API_KEY_1,
+  process.env.GEMINI_API_KEY_2,
+  process.env.GEMINI_API_KEY_3
+];
+
 export async function POST(req) {
   try {
     const { text, files, customInstruction } = await req.json();
@@ -77,54 +83,50 @@ export async function POST(req) {
       Provide exactly 3 questions. Ensure the text is structured beautifully.
     `;
 
-    const apiKey = process.env.GROQ_API_KEY;
-    if (!apiKey) throw new Error("GROQ_API_KEY is not set.");
+    let parts = [prompt];
 
-    const groq = new OpenAI({ apiKey, baseURL: "https://api.groq.com/openai/v1" });
-
-    const hasImage = files && files.length > 0 && files.some(f => f.base64);
-    const selectedModel = hasImage ? "llama-3.2-11b-vision-preview" : "llama-3.3-70b-versatile";
-
-    let messageContent = prompt;
-    
-    if (hasImage) {
-      messageContent = [{ type: "text", text: prompt }];
+    if (files && files.length > 0) {
       files.forEach(file => {
         if (file.base64) {
-          const base64Data = file.base64.includes(',') ? file.base64.split(',')[1] : file.base64;
-          messageContent.push({
-            type: "image_url",
-            image_url: {
-              url: `data:${file.mimeType};base64,${base64Data}`
+          parts.push({
+            inlineData: {
+              data: file.base64.includes(',') ? file.base64.split(',')[1] : file.base64,
+              mimeType: file.mimeType
             }
           });
         }
       });
     }
 
-    const requestOptions = {
-      messages: [{ role: "user", content: messageContent }],
-      model: selectedModel,
-    };
+    let data = null;
+    let lastError = null;
 
-    if (!hasImage) {
-      requestOptions.response_format = { type: "json_object" };
+    for (const key of API_KEYS) {
+      if (!key || key.startsWith("YOUR_")) continue;
+
+      try {
+        const ai = new GoogleGenerativeAI(key);
+        const model = ai.getGenerativeModel({
+          model: "gemini-1.5-flash",
+          generationConfig: { responseMimeType: "application/json" }
+        });
+
+        const result = await model.generateContent(parts);
+        data = JSON.parse(result.response.text());
+        break; 
+      } catch (err) {
+        console.error("API Key failed:", err.message);
+        lastError = err;
+      }
     }
 
-    const completion = await groq.chat.completions.create(requestOptions);
-
-    let resultText = completion.choices[0].message.content.trim();
-    
-    if (resultText.startsWith("```json")) {
-      resultText = resultText.substring(7, resultText.length - 3).trim();
-    } else if (resultText.startsWith("```")) {
-      resultText = resultText.substring(3, resultText.length - 3).trim();
+    if (!data) {
+      throw new Error("All API keys failed. Last error: " + (lastError?.message || "Unknown error"));
     }
 
-    const data = JSON.parse(resultText);
     return Response.json(data);
   } catch (error) {
-    console.error("Groq API Error, running MOCK FALLBACK:", error.message);
+    console.error("Gemini API Error, running MOCK FALLBACK:", error.message);
     await new Promise(res => setTimeout(res, 3500));
     return Response.json(MOCK_DATA[Math.floor(Math.random() * MOCK_DATA.length)], {
       headers: { 'X-Is-Mock': 'true' }

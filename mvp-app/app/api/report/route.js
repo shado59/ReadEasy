@@ -1,4 +1,4 @@
-import OpenAI from "openai";
+import { GoogleGenerativeAI } from "@google/generative-ai";
 
 const MOCK_REPORT_DATA = [
   [
@@ -9,6 +9,12 @@ const MOCK_REPORT_DATA = [
     { "topic": "The Solar System Center ☀️", "explanation": "Almost got it! Remember that the Sun is at the very center of our Solar System, and all the planets, including Earth, orbit around it." },
     { "topic": "Rocky Planets 🪨", "explanation": "A quick recap: The four inner planets (Mercury, Venus, Earth, Mars) are made of solid rock and metal, while the giant outer planets are mostly made of gas." }
   ]
+];
+
+const API_KEYS = [
+  process.env.GEMINI_API_KEY_1,
+  process.env.GEMINI_API_KEY_2,
+  process.env.GEMINI_API_KEY_3
 ];
 
 export async function POST(req) {
@@ -42,36 +48,43 @@ export async function POST(req) {
       2. Re-explain the core concept from the original text in a very simple, easy-to-understand way.
       3. Do NOT make them feel bad. Use an encouraging tone.
 
-      Format your response strictly as a JSON object with a single key "report" containing an array of objects, where each object has:
+      Format your response strictly as a JSON array of objects, where each object has:
       - "topic": A short title of what they misunderstood (e.g. "Photosynthesis Process")
       - "explanation": The gentle explanation and re-teaching of the concept.
 
-      Return ONLY the JSON object like:
-      {
-        "report": [
-          { "topic": "...", "explanation": "..." }
-        ]
-      }
+      Return ONLY the raw JSON array. No markdown blocks, no extra text.
     `;
 
-    const apiKey = process.env.GROQ_API_KEY;
-    if (!apiKey) throw new Error("GROQ_API_KEY is not set.");
+    let data = null;
+    let lastError = null;
 
-    const groq = new OpenAI({ apiKey, baseURL: "https://api.groq.com/openai/v1" });
+    for (const key of API_KEYS) {
+      if (!key || key.startsWith("YOUR_")) continue;
+      
+      try {
+        const ai = new GoogleGenerativeAI(key);
+        const model = ai.getGenerativeModel({
+          model: "gemini-1.5-flash",
+          generationConfig: { responseMimeType: "application/json" }
+        });
+        
+        const result = await model.generateContent(prompt);
+        data = JSON.parse(result.response.text());
+        break; 
+      } catch (err) {
+        console.error("Report API Key failed:", err.message);
+        lastError = err;
+      }
+    }
 
-    const completion = await groq.chat.completions.create({
-      messages: [{ role: "user", content: prompt }],
-      model: "llama-3.1-8b-instant",
-      response_format: { type: "json_object" },
-    });
+    if (!data) {
+      throw new Error("All API keys failed. Last error: " + (lastError?.message || "Unknown error"));
+    }
 
-    const resultText = completion.choices[0].message.content;
-    let data = JSON.parse(resultText);
     const finalReport = Array.isArray(data) ? data : (data.report || Object.values(data)[0] || []);
-
     return Response.json(finalReport);
   } catch (error) {
-    console.error("Groq API Error, running MOCK FALLBACK:", error.message);
+    console.error("Gemini API Error, running MOCK FALLBACK:", error.message);
     await new Promise(res => setTimeout(res, 3500));
     return Response.json(MOCK_REPORT_DATA[Math.floor(Math.random() * MOCK_REPORT_DATA.length)], {
       headers: { 'X-Is-Mock': 'true' }
