@@ -39,7 +39,7 @@ export async function POST(req) {
       try {
         const ai = new GoogleGenerativeAI(key);
         const model = ai.getGenerativeModel({
-          model: "gemini-3.5-flash",
+          model: "gemini-1.5-flash",
           generationConfig: { responseMimeType: "application/json" }
         });
         
