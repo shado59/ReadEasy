@@ -1,16 +1,5 @@
 import { GoogleGenerativeAI } from "@google/generative-ai";
 
-const MOCK_REPORT_DATA = [
-  [
-    { "topic": "Photosynthesis Requirements 🌿", "explanation": "It looks like you missed the question about what plants need! Remember, plants need sunlight, water, and carbon dioxide to make their food. They don't use dirt for energy." },
-    { "topic": "Oxygen Production 🌬️", "explanation": "Don't worry, this is tricky! Plants take in carbon dioxide and release oxygen as a byproduct. That's why plants are so important for us to breathe!" }
-  ],
-  [
-    { "topic": "The Solar System Center ☀️", "explanation": "Almost got it! Remember that the Sun is at the very center of our Solar System, and all the planets, including Earth, orbit around it." },
-    { "topic": "Rocky Planets 🪨", "explanation": "A quick recap: The four inner planets (Mercury, Venus, Earth, Mars) are made of solid rock and metal, while the giant outer planets are mostly made of gas." }
-  ]
-];
-
 const API_KEYS = [
   process.env.GEMINI_API_KEY_1,
   process.env.GEMINI_API_KEY_2,
@@ -21,6 +10,7 @@ export async function POST(req) {
   try {
     const body = await req.json();
     const { questions, userAnswers, originalText } = body;
+    const userApiKey = req.headers.get("x-user-api-key");
 
     if (!questions || !userAnswers || !originalText) {
       return Response.json({ error: "Missing required fields" }, { status: 400 });
@@ -57,8 +47,9 @@ export async function POST(req) {
 
     let data = null;
     let lastError = null;
+    const keysToTry = userApiKey ? [userApiKey] : API_KEYS;
 
-    for (const key of API_KEYS) {
+    for (const key of keysToTry) {
       if (!key || key.startsWith("YOUR_")) continue;
       
       try {
@@ -78,16 +69,16 @@ export async function POST(req) {
     }
 
     if (!data) {
-      throw new Error("All API keys failed. Last error: " + (lastError?.message || "Unknown error"));
+      throw lastError || new Error("All API keys failed.");
     }
 
     const finalReport = Array.isArray(data) ? data : (data.report || Object.values(data)[0] || []);
     return Response.json(finalReport);
   } catch (error) {
-    console.error("Gemini API Error, running MOCK FALLBACK:", error.message);
-    await new Promise(res => setTimeout(res, 3500));
-    return Response.json(MOCK_REPORT_DATA[Math.floor(Math.random() * MOCK_REPORT_DATA.length)], {
-      headers: { 'X-Is-Mock': 'true' }
-    });
+    console.error("Gemini API Error:", error.message);
+    return Response.json(
+      { error: "Our AI servers are currently busy. Please try again later or provide your own Gemini API key below to continue." },
+      { status: 500 }
+    );
   }
 }

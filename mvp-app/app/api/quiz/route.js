@@ -1,18 +1,5 @@
 import { GoogleGenerativeAI } from "@google/generative-ai";
 
-const MOCK_QUIZ_DATA = [
-  [
-    { "question": "What is the primary function of mitochondria? 🔋", "options": ["Digestion", "Energy production", "Photosynthesis"], "correctAnswer": 1 },
-    { "question": "Which organelle is known as the control center? 🧠", "options": ["Nucleus", "Ribosome", "Cell Wall"], "correctAnswer": 0 },
-    { "question": "What surrounds and protects a plant cell? 🧱", "options": ["Cell Membrane", "Cytoplasm", "Cell Wall"], "correctAnswer": 2 }
-  ],
-  [
-    { "question": "Who painted the Mona Lisa? 🎨", "options": ["Vincent van Gogh", "Leonardo da Vinci", "Pablo Picasso"], "correctAnswer": 1 },
-    { "question": "In which city is the Eiffel Tower located? 🗼", "options": ["London", "Rome", "Paris"], "correctAnswer": 2 },
-    { "question": "What is the longest river in the world? 🌊", "options": ["Amazon", "Nile", "Yangtze"], "correctAnswer": 1 }
-  ]
-];
-
 const API_KEYS = [
   process.env.GEMINI_API_KEY_1,
   process.env.GEMINI_API_KEY_2,
@@ -22,6 +9,7 @@ const API_KEYS = [
 export async function POST(req) {
   try {
     const { contextText, existingQuestions } = await req.json();
+    const userApiKey = req.headers.get("x-user-api-key");
 
     const prompt = `
       You are an engaging assistant creating quizzes for students.
@@ -43,8 +31,9 @@ export async function POST(req) {
 
     let data = null;
     let lastError = null;
+    const keysToTry = userApiKey ? [userApiKey] : API_KEYS;
 
-    for (const key of API_KEYS) {
+    for (const key of keysToTry) {
       if (!key || key.startsWith("YOUR_")) continue;
       
       try {
@@ -64,16 +53,16 @@ export async function POST(req) {
     }
 
     if (!data) {
-      throw new Error("All API keys failed. Last error: " + (lastError?.message || "Unknown error"));
+      throw lastError || new Error("All API keys failed.");
     }
 
     const finalData = Array.isArray(data) ? data : (data.questions || Object.values(data)[0] || []);
     return Response.json(finalData);
   } catch (error) {
-    console.error("Gemini API Error, running MOCK FALLBACK:", error.message);
-    await new Promise(res => setTimeout(res, 3500));
-    return Response.json(MOCK_QUIZ_DATA[Math.floor(Math.random() * MOCK_QUIZ_DATA.length)], {
-      headers: { 'X-Is-Mock': 'true' }
-    });
+    console.error("Gemini API Error:", error.message);
+    return Response.json(
+      { error: "Our AI servers are currently busy. Please try again later or provide your own Gemini API key below to continue." },
+      { status: 500 }
+    );
   }
 }

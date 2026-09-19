@@ -13,7 +13,8 @@ export default function Home() {
   const [speaking, setSpeaking] = useState(null);
   const [dragActive, setDragActive] = useState(false);
   const [loadingQuiz, setLoadingQuiz] = useState(false);
-  const [isMockData, setIsMockData] = useState(false);
+  const [apiError, setApiError] = useState("");
+  const [userApiKey, setUserApiKey] = useState("");
   
   const [loadingMessage, setLoadingMessage] = useState("Analyzing document...");
   const [progress, setProgress] = useState(0);
@@ -64,18 +65,16 @@ export default function Home() {
 
   const generateSample = async () => {
     setLoadingSample(true);
+    setApiError("");
     try {
-      const res = await fetch("/api/generate-sample");
-      if (res.headers.get('X-Is-Mock') === 'true') {
-        setIsMockData(true);
-      } else {
-        setIsMockData(false);
-      }
+      const res = await fetch("/api/generate-sample", {
+        headers: { "X-User-Api-Key": userApiKey }
+      });
       const data = await res.json();
       if (res.ok && data.text) {
         setInput(data.text);
       } else {
-        alert(data.error || "Failed to generate sample.");
+        setApiError(data.error || "Failed to generate sample.");
       }
     } catch (e) {
       alert("Error generating sample text.");
@@ -145,21 +144,20 @@ export default function Home() {
     setQuizSubmitted(false);
     setScore(null);
     setWeakPointsReport(null);
+    setApiError("");
     
     try {
       const res = await fetch("/api/process", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { 
+          "Content-Type": "application/json",
+          "X-User-Api-Key": userApiKey
+        },
         body: JSON.stringify({ text: input, files: files, customInstruction: customInstruction })
       });
-      if (res.headers.get('X-Is-Mock') === 'true') {
-        setIsMockData(true);
-      } else {
-        setIsMockData(false);
-      }
       const data = await res.json();
       if (!res.ok || data.error) {
-        alert(data.error || "Server error occurred!");
+        setApiError(data.error || "Server error occurred!");
         setLoading(false);
         return;
       }
@@ -198,25 +196,26 @@ export default function Home() {
 
   const generateReport = async () => {
     setLoadingReport(true);
+    setApiError("");
     try {
       const originalText = result.simple.map(s => s.text).join(" ");
       const res = await fetch("/api/report", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { 
+          "Content-Type": "application/json",
+          "X-User-Api-Key": userApiKey
+        },
         body: JSON.stringify({ 
           questions: result.questions,
           userAnswers: answers,
           originalText 
         })
       });
-      if (res.headers.get('X-Is-Mock') === 'true') {
-        setIsMockData(true);
-      }
       const data = await res.json();
       if (res.ok) {
         setWeakPointsReport(data);
       } else {
-        alert("Failed to generate report.");
+        setApiError(data.error || "Failed to generate report.");
       }
     } catch (e) {
       alert("Error connecting to report server.");
@@ -256,19 +255,20 @@ export default function Home() {
 
   const addMoreQuizzes = async () => {
     setLoadingQuiz(true);
+    setApiError("");
     try {
       const contextText = result.simple.map(s => s.text).join(" ");
       const res = await fetch("/api/quiz", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { 
+          "Content-Type": "application/json",
+          "X-User-Api-Key": userApiKey
+        },
         body: JSON.stringify({ 
           contextText, 
           existingQuestions: result.questions.map(q => q.question) 
         })
       });
-      if (res.headers.get('X-Is-Mock') === 'true') {
-        setIsMockData(true);
-      }
       const newQuestions = await res.json();
       if (res.ok && Array.isArray(newQuestions)) {
         setResult({
@@ -279,7 +279,7 @@ export default function Home() {
         setScore(null);
         setWeakPointsReport(null);
       } else {
-        alert("Server error when generating quizzes.");
+        setApiError(newQuestions.error || "Server error when generating quizzes.");
       }
     } catch (e) {
       alert("Error adding quizzes!");
@@ -298,11 +298,11 @@ export default function Home() {
         </header>
       )}
 
-      {isMockData && (
+      {apiError && (
         <div className="max-w-4xl mx-auto mb-8 animate-in fade-in slide-in-from-top-4 duration-500">
           <div className="bg-red-50 dark:bg-red-900/20 border-l-4 border-red-500 text-red-700 dark:text-red-400 p-4 rounded-xl shadow-sm font-semibold flex items-center gap-3">
             <span className="text-2xl flex-shrink-0">⚠️</span>
-            <p>Our AI servers are currently experiencing high demand. We are displaying high-quality sample content for demonstration purposes.</p>
+            <p>{apiError}</p>
           </div>
         </div>
       )}
@@ -345,6 +345,14 @@ export default function Home() {
             placeholder="Special Instructions (Optional)..."
             value={customInstruction}
             onChange={(e) => setCustomInstruction(e.target.value)}
+          />
+
+          <input 
+            type="password"
+            className="w-full p-5 bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 shadow-sm rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none transition-all text-slate-800 dark:text-slate-100 font-medium placeholder:text-slate-400 dark:placeholder:text-slate-500"
+            placeholder="Custom Gemini API Key (Optional)..."
+            value={userApiKey}
+            onChange={(e) => setUserApiKey(e.target.value)}
           />
           
           <div 

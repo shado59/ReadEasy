@@ -1,46 +1,5 @@
 import { GoogleGenerativeAI } from "@google/generative-ai";
 
-const MOCK_DATA = [
-  {
-    "original": [
-      { "title": "Photosynthesis Overview", "text": "Photosynthesis is a process used by plants and other organisms to convert light energy into chemical energy that can later be released to fuel the organism's metabolic activities." },
-      { "title": "Chemical Energy", "text": "This chemical energy is stored in carbohydrate molecules, such as sugars, which are synthesized from carbon dioxide and water." }
-    ],
-    "simple": [
-      { "title": "Making Food 🌿", "text": "Photosynthesis is how plants make their own food using sunlight." },
-      { "title": "Ingredients 💧", "text": "Plants need sunlight, water, and air (carbon dioxide) to make sugar for energy." }
-    ],
-    "verySimple": [
-      { "title": "Plant Food ✨", "text": "Plants make food from the sun." },
-      { "title": "Why we care 🫁", "text": "This gives us oxygen to breathe!" }
-    ],
-    "questions": [
-      { "question": "What do plants use for energy? ☀️", "options": ["Sunlight", "Dirt", "Rocks"], "correctAnswer": 0 },
-      { "question": "What is the main food plants make? 🍬", "options": ["Water", "Sugar", "Salt"], "correctAnswer": 1 },
-      { "question": "What do plants release that humans need? 🌬️", "options": ["Carbon dioxide", "Oxygen", "Nitrogen"], "correctAnswer": 1 }
-    ]
-  },
-  {
-    "original": [
-      { "title": "The Solar System", "text": "The Solar System is the gravitationally bound system of the Sun and the objects that orbit it. It formed 4.6 billion years ago from the gravitational collapse of a giant interstellar molecular cloud." },
-      { "title": "Planetary Composition", "text": "The inner planets—Mercury, Venus, Earth and Mars—are terrestrial planets, being composed primarily of rock and metal." }
-    ],
-    "simple": [
-      { "title": "Our Cosmic Home 🪐", "text": "The Solar System includes the Sun and everything going around it, like planets." },
-      { "title": "Rocky Planets 🪨", "text": "The inner planets closest to the Sun are made of solid rock and metal." }
-    ],
-    "verySimple": [
-      { "title": "The Sun ✨", "text": "Our solar system has one star, the Sun." },
-      { "title": "Earth 🌍", "text": "Earth is the third planet from the Sun." }
-    ],
-    "questions": [
-      { "question": "What is at the center of our Solar System? ☀️", "options": ["Earth", "The Sun", "Jupiter"], "correctAnswer": 1 },
-      { "question": "What are the inner planets mostly made of? 🪨", "options": ["Gas", "Water", "Rock and metal"], "correctAnswer": 2 },
-      { "question": "How many stars are in our Solar System? ⭐", "options": ["One", "Ten", "Billions"], "correctAnswer": 0 }
-    ]
-  }
-];
-
 const API_KEYS = [
   process.env.GEMINI_API_KEY_1,
   process.env.GEMINI_API_KEY_2,
@@ -50,6 +9,7 @@ const API_KEYS = [
 export async function POST(req) {
   try {
     const { text, files, customInstruction } = await req.json();
+    const userApiKey = req.headers.get("x-user-api-key");
 
     const prompt = `
       You are an engaging and highly helpful assistant for students with dyslexia or those learning English.
@@ -100,8 +60,9 @@ export async function POST(req) {
 
     let data = null;
     let lastError = null;
+    const keysToTry = userApiKey ? [userApiKey] : API_KEYS;
 
-    for (const key of API_KEYS) {
+    for (const key of keysToTry) {
       if (!key || key.startsWith("YOUR_")) continue;
 
       try {
@@ -121,15 +82,15 @@ export async function POST(req) {
     }
 
     if (!data) {
-      throw new Error("All API keys failed. Last error: " + (lastError?.message || "Unknown error"));
+      throw lastError || new Error("All API keys failed.");
     }
 
     return Response.json(data);
   } catch (error) {
-    console.error("Gemini API Error, running MOCK FALLBACK:", error.message);
-    await new Promise(res => setTimeout(res, 3500));
-    return Response.json(MOCK_DATA[Math.floor(Math.random() * MOCK_DATA.length)], {
-      headers: { 'X-Is-Mock': 'true' }
-    });
+    console.error("Gemini API Error:", error.message);
+    return Response.json(
+      { error: "Our AI servers are currently busy. Please try again later or provide your own Gemini API key below to continue." },
+      { status: 500 }
+    );
   }
 }
