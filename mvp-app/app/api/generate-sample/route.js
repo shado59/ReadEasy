@@ -6,7 +6,7 @@ const API_KEYS = [
   process.env.GEMINI_API_KEY_3
 ];
 
-const MODELS_TO_TRY = ["gemini-3.8-flash", "gemini-1.5-flash", "gemini-1.5-pro", "gemini-pro"];
+const MODELS_TO_TRY = ["gemini-3.8-flash"];
 
 export async function GET(req) {
   try {
