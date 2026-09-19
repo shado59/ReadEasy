@@ -15,41 +15,28 @@ export default function Home() {
   const [loadingQuiz, setLoadingQuiz] = useState(false);
   const [apiError, setApiError] = useState("");
   const [userApiKey, setUserApiKey] = useState("");
-  const errorBannerRef = useRef(null);
-  const apiKeyInputRef = useRef(null);
-  const [lineCoords, setLineCoords] = useState(null);
 
-  useEffect(() => {
-    const updateCoords = () => {
-      if (apiError && errorBannerRef.current && apiKeyInputRef.current) {
-        const bannerRect = errorBannerRef.current.getBoundingClientRect();
-        const inputRect = apiKeyInputRef.current.getBoundingClientRect();
-        
-        const scrollX = window.scrollX;
-        const scrollY = window.scrollY;
-        
-        setLineCoords({
-          startX: bannerRect.left + bannerRect.width / 2 + scrollX,
-          startY: bannerRect.bottom + scrollY + 5,
-          endX: inputRect.left + inputRect.width / 2 + scrollX,
-          endY: inputRect.top + scrollY - 5
-        });
-      } else {
-        setLineCoords(null);
+  const fetchWithRetry = async (url, options, maxRetries = 3) => {
+    for (let i = 0; i < maxRetries; i++) {
+      try {
+        const res = await fetch(url, options);
+        if (res.ok) {
+          return res;
+        }
+        if (i < maxRetries - 1) {
+          await new Promise(r => setTimeout(r, 2000));
+        } else {
+          return res;
+        }
+      } catch (err) {
+        if (i < maxRetries - 1) {
+          await new Promise(r => setTimeout(r, 2000));
+        } else {
+          throw err;
+        }
       }
-    };
-
-    if (apiError) {
-      const timer = setTimeout(updateCoords, 600); // Wait for fade-in animation
-      window.addEventListener('resize', updateCoords);
-      return () => {
-        clearTimeout(timer);
-        window.removeEventListener('resize', updateCoords);
-      };
-    } else {
-      setLineCoords(null);
     }
-  }, [apiError]);
+  };
 
   const [loadingMessage, setLoadingMessage] = useState("Analyzing document...");
   const [progress, setProgress] = useState(0);
@@ -102,14 +89,14 @@ export default function Home() {
     setLoadingSample(true);
     setApiError("");
     try {
-      const res = await fetch("/api/generate-sample", {
+      const res = await fetchWithRetry("/api/generate-sample", {
         headers: { "X-User-Api-Key": userApiKey }
       });
       const data = await res.json();
       if (res.ok && data.text) {
         setInput(data.text);
       } else {
-        setApiError(data.error || "Failed to generate sample.");
+        setApiError(data.error ? data.error + " Please try again." : "Failed to generate sample. Please try again.");
       }
     } catch (e) {
       alert("Error generating sample text.");
@@ -182,7 +169,7 @@ export default function Home() {
     setApiError("");
     
     try {
-      const res = await fetch("/api/process", {
+      const res = await fetchWithRetry("/api/process", {
         method: "POST",
         headers: { 
           "Content-Type": "application/json",
@@ -192,7 +179,7 @@ export default function Home() {
       });
       const data = await res.json();
       if (!res.ok || data.error) {
-        setApiError(data.error || "Server error occurred!");
+        setApiError(data.error ? data.error + " Zəhmət olmasa yenidən cəhd edin." : "Server error occurred! Zəhmət olmasa yenidən cəhd edin.");
         setLoading(false);
         return;
       }
@@ -234,7 +221,7 @@ export default function Home() {
     setApiError("");
     try {
       const originalText = result.simple.map(s => s.text).join(" ");
-      const res = await fetch("/api/report", {
+      const res = await fetchWithRetry("/api/report", {
         method: "POST",
         headers: { 
           "Content-Type": "application/json",
@@ -250,7 +237,7 @@ export default function Home() {
       if (res.ok) {
         setWeakPointsReport(data);
       } else {
-        setApiError(data.error || "Failed to generate report.");
+        setApiError(data.error ? data.error + " Zəhmət olmasa yenidən cəhd edin." : "Failed to generate report. Zəhmət olmasa yenidən cəhd edin.");
       }
     } catch (e) {
       alert("Error connecting to report server.");
@@ -293,7 +280,7 @@ export default function Home() {
     setApiError("");
     try {
       const contextText = result.simple.map(s => s.text).join(" ");
-      const res = await fetch("/api/quiz", {
+      const res = await fetchWithRetry("/api/quiz", {
         method: "POST",
         headers: { 
           "Content-Type": "application/json",
@@ -314,7 +301,7 @@ export default function Home() {
         setScore(null);
         setWeakPointsReport(null);
       } else {
-        setApiError(newQuestions.error || "Server error when generating quizzes.");
+        setApiError(newQuestions.error ? newQuestions.error + " Zəhmət olmasa yenidən cəhd edin." : "Server error when generating quizzes. Zəhmət olmasa yenidən cəhd edin.");
       }
     } catch (e) {
       alert("Error adding quizzes!");
@@ -324,47 +311,7 @@ export default function Home() {
 
   return (
     <div className="w-full relative transition-all duration-700 ease-in-out">
-      <style>{`
-        @keyframes drawLine {
-          from { stroke-dashoffset: 1500; }
-          to { stroke-dashoffset: 0; }
-        }
-        .animated-connection {
-          stroke-dasharray: 1500;
-          animation: drawLine 1.5s cubic-bezier(0.4, 0, 0.2, 1) forwards;
-        }
-      `}</style>
-      
-      {lineCoords && (
-        <svg 
-          className="absolute top-0 left-0 w-full pointer-events-none z-50" 
-          style={{ height: typeof document !== 'undefined' ? `${Math.max(document.body.scrollHeight, lineCoords.endY + 200)}px` : '200vh' }}
-        >
-          <path 
-            d={`M ${lineCoords.startX} ${lineCoords.startY} C ${lineCoords.startX} ${lineCoords.startY + 150}, ${lineCoords.endX} ${lineCoords.endY - 150}, ${lineCoords.endX} ${lineCoords.endY}`}
-            fill="none"
-            stroke="url(#gradientRed)"
-            strokeWidth="5"
-            strokeLinecap="round"
-            className="animated-connection"
-          />
-          <circle 
-            cx={lineCoords.endX} 
-            cy={lineCoords.endY} 
-            r="6" 
-            fill="#ef4444" 
-            className="animate-bounce"
-            style={{ animationDuration: '1s', animationDelay: '1.2s' }}
-          />
-          <defs>
-            <linearGradient id="gradientRed" x1="0%" y1="0%" x2="0%" y2="100%">
-              <stop offset="0%" stopColor="#f87171" stopOpacity="0.2" />
-              <stop offset="50%" stopColor="#ef4444" stopOpacity="0.8" />
-              <stop offset="100%" stopColor="#dc2626" stopOpacity="1" />
-            </linearGradient>
-          </defs>
-        </svg>
-      )}
+
 
       {/* Header section */}
       {!result && !loading && (
@@ -375,7 +322,7 @@ export default function Home() {
       )}
 
       {apiError && (
-        <div ref={errorBannerRef} className="max-w-4xl mx-auto mb-8 animate-in fade-in slide-in-from-top-4 duration-500 relative z-20">
+        <div className="max-w-4xl mx-auto mb-8 animate-in fade-in slide-in-from-top-4 duration-500 relative z-20">
           <div className="bg-red-50 dark:bg-red-900/20 border-l-4 border-red-500 text-red-700 dark:text-red-400 p-4 rounded-xl shadow-sm font-semibold flex items-center gap-3">
             <span className="text-2xl flex-shrink-0">⚠️</span>
             <p>{apiError}</p>
@@ -426,7 +373,6 @@ export default function Home() {
           <div className="relative group mt-2">
             <div className={`absolute -inset-1 rounded-2xl blur-md transition-all duration-1000 ${apiError ? "bg-gradient-to-r from-red-500 to-rose-500 opacity-80 animate-pulse" : "bg-gradient-to-r from-indigo-500 via-purple-500 to-pink-500 opacity-30 group-hover:opacity-70 group-hover:duration-200"}`}></div>
             <input 
-              ref={apiKeyInputRef}
               type="password"
               className="relative w-full p-5 bg-white dark:bg-slate-900 border-none shadow-xl rounded-xl focus:ring-4 focus:ring-indigo-500/50 outline-none transition-all text-slate-800 dark:text-slate-100 font-extrabold placeholder:text-slate-400 dark:placeholder:text-slate-500 z-10"
               placeholder="✨ Custom Gemini API Key (Optional)..."
