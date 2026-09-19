@@ -45,7 +45,7 @@ export async function GET(req) {
   } catch (error) {
     console.error("Gemini API Error:", error.message);
     return Response.json(
-      { error: "Our AI servers are currently busy. Please try again later or provide your own Gemini API key below to continue." },
+      { error: `API Error: ${error.message} (Please provide your own Gemini API key below to continue)` },
       { status: 500 }
     );
   }
