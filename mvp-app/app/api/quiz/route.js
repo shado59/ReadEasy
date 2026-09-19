@@ -6,6 +6,8 @@ const API_KEYS = [
   process.env.GEMINI_API_KEY_3
 ];
 
+const MODELS_TO_TRY = ["gemini-3.8-flash", "gemini-1.5-flash", "gemini-1.5-pro", "gemini-pro"];
+
 export async function POST(req) {
   try {
     const { contextText, existingQuestions } = await req.json();
@@ -36,24 +38,31 @@ export async function POST(req) {
     for (const key of keysToTry) {
       if (!key || key.startsWith("YOUR_")) continue;
       
-      try {
-        const ai = new GoogleGenerativeAI(key);
-        const model = ai.getGenerativeModel({
-          model: "gemini-1.5-flash",
-          generationConfig: { responseMimeType: "application/json" }
-        });
-        
-        const result = await model.generateContent(prompt);
-        data = JSON.parse(result.response.text());
-        break; 
-      } catch (err) {
-        console.error("Quiz API Key failed:", err.message);
-        lastError = err;
+      const ai = new GoogleGenerativeAI(key);
+      
+      for (const modelName of MODELS_TO_TRY) {
+        try {
+          const config = { model: modelName };
+          if (modelName.includes("1.5")) {
+            config.generationConfig = { responseMimeType: "application/json" };
+          }
+          
+          const model = ai.getGenerativeModel(config);
+          const result = await model.generateContent(prompt);
+          const rawText = result.response.text();
+          
+          data = JSON.parse(rawText.replace(/```json\n?|```/g, '').trim());
+          break; 
+        } catch (err) {
+          console.error(`[${modelName}] failed with key ${key.substring(0, 5)}... :`, err.message);
+          lastError = err;
+        }
       }
+      if (data) break;
     }
 
     if (!data) {
-      throw lastError || new Error("All API keys failed.");
+      throw lastError || new Error("All API keys and models failed.");
     }
 
     const finalData = Array.isArray(data) ? data : (data.questions || Object.values(data)[0] || []);
