@@ -15,7 +15,42 @@ export default function Home() {
   const [loadingQuiz, setLoadingQuiz] = useState(false);
   const [apiError, setApiError] = useState("");
   const [userApiKey, setUserApiKey] = useState("");
-  
+  const errorBannerRef = useRef(null);
+  const apiKeyInputRef = useRef(null);
+  const [lineCoords, setLineCoords] = useState(null);
+
+  useEffect(() => {
+    const updateCoords = () => {
+      if (apiError && errorBannerRef.current && apiKeyInputRef.current) {
+        const bannerRect = errorBannerRef.current.getBoundingClientRect();
+        const inputRect = apiKeyInputRef.current.getBoundingClientRect();
+        
+        const scrollX = window.scrollX;
+        const scrollY = window.scrollY;
+        
+        setLineCoords({
+          startX: bannerRect.left + bannerRect.width / 2 + scrollX,
+          startY: bannerRect.bottom + scrollY + 5,
+          endX: inputRect.left + inputRect.width / 2 + scrollX,
+          endY: inputRect.top + scrollY - 5
+        });
+      } else {
+        setLineCoords(null);
+      }
+    };
+
+    if (apiError) {
+      const timer = setTimeout(updateCoords, 600); // Wait for fade-in animation
+      window.addEventListener('resize', updateCoords);
+      return () => {
+        clearTimeout(timer);
+        window.removeEventListener('resize', updateCoords);
+      };
+    } else {
+      setLineCoords(null);
+    }
+  }, [apiError]);
+
   const [loadingMessage, setLoadingMessage] = useState("Analyzing document...");
   const [progress, setProgress] = useState(0);
 
@@ -289,7 +324,48 @@ export default function Home() {
 
   return (
     <div className="w-full relative transition-all duration-700 ease-in-out">
+      <style>{`
+        @keyframes drawLine {
+          from { stroke-dashoffset: 1500; }
+          to { stroke-dashoffset: 0; }
+        }
+        .animated-connection {
+          stroke-dasharray: 1500;
+          animation: drawLine 1.5s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+        }
+      `}</style>
       
+      {lineCoords && (
+        <svg 
+          className="absolute top-0 left-0 w-full pointer-events-none z-50" 
+          style={{ height: typeof document !== 'undefined' ? \`\${Math.max(document.body.scrollHeight, lineCoords.endY + 200)}px\` : '200vh' }}
+        >
+          <path 
+            d={\`M \${lineCoords.startX} \${lineCoords.startY} C \${lineCoords.startX} \${lineCoords.startY + 150}, \${lineCoords.endX} \${lineCoords.endY - 150}, \${lineCoords.endX} \${lineCoords.endY}\`}
+            fill="none"
+            stroke="url(#gradientRed)"
+            strokeWidth="5"
+            strokeLinecap="round"
+            className="animated-connection"
+          />
+          <circle 
+            cx={lineCoords.endX} 
+            cy={lineCoords.endY} 
+            r="6" 
+            fill="#ef4444" 
+            className="animate-bounce"
+            style={{ animationDuration: '1s', animationDelay: '1.2s' }}
+          />
+          <defs>
+            <linearGradient id="gradientRed" x1="0%" y1="0%" x2="0%" y2="100%">
+              <stop offset="0%" stopColor="#f87171" stopOpacity="0.2" />
+              <stop offset="50%" stopColor="#ef4444" stopOpacity="0.8" />
+              <stop offset="100%" stopColor="#dc2626" stopOpacity="1" />
+            </linearGradient>
+          </defs>
+        </svg>
+      )}
+
       {/* Header section */}
       {!result && !loading && (
         <header className="text-center mb-10 max-w-2xl mx-auto">
@@ -299,7 +375,7 @@ export default function Home() {
       )}
 
       {apiError && (
-        <div className="max-w-4xl mx-auto mb-8 animate-in fade-in slide-in-from-top-4 duration-500">
+        <div ref={errorBannerRef} className="max-w-4xl mx-auto mb-8 animate-in fade-in slide-in-from-top-4 duration-500 relative z-20">
           <div className="bg-red-50 dark:bg-red-900/20 border-l-4 border-red-500 text-red-700 dark:text-red-400 p-4 rounded-xl shadow-sm font-semibold flex items-center gap-3">
             <span className="text-2xl flex-shrink-0">⚠️</span>
             <p>{apiError}</p>
@@ -347,13 +423,17 @@ export default function Home() {
             onChange={(e) => setCustomInstruction(e.target.value)}
           />
 
-          <input 
-            type="password"
-            className="w-full p-5 bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 shadow-sm rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none transition-all text-slate-800 dark:text-slate-100 font-medium placeholder:text-slate-400 dark:placeholder:text-slate-500"
-            placeholder="Custom Gemini API Key (Optional)..."
-            value={userApiKey}
-            onChange={(e) => setUserApiKey(e.target.value)}
-          />
+          <div className="relative group mt-2">
+            <div className={\`absolute -inset-1 rounded-2xl blur-md transition-all duration-1000 \${apiError ? "bg-gradient-to-r from-red-500 to-rose-500 opacity-80 animate-pulse" : "bg-gradient-to-r from-indigo-500 via-purple-500 to-pink-500 opacity-30 group-hover:opacity-70 group-hover:duration-200"}\`}></div>
+            <input 
+              ref={apiKeyInputRef}
+              type="password"
+              className="relative w-full p-5 bg-white dark:bg-slate-900 border-none shadow-xl rounded-xl focus:ring-4 focus:ring-indigo-500/50 outline-none transition-all text-slate-800 dark:text-slate-100 font-extrabold placeholder:text-slate-400 dark:placeholder:text-slate-500 z-10"
+              placeholder="✨ Custom Gemini API Key (Optional)..."
+              value={userApiKey}
+              onChange={(e) => setUserApiKey(e.target.value)}
+            />
+          </div>
           
           <div 
             className={`relative border-2 border-dashed rounded-xl p-10 text-center cursor-pointer transition-colors flex flex-col items-center justify-center gap-3
