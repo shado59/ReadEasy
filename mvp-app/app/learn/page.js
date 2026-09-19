@@ -338,10 +338,10 @@ export default function Home() {
       {lineCoords && (
         <svg 
           className="absolute top-0 left-0 w-full pointer-events-none z-50" 
-          style={{ height: typeof document !== 'undefined' ? \`\${Math.max(document.body.scrollHeight, lineCoords.endY + 200)}px\` : '200vh' }}
+          style={{ height: typeof document !== 'undefined' ? `${Math.max(document.body.scrollHeight, lineCoords.endY + 200)}px` : '200vh' }}
         >
           <path 
-            d={\`M \${lineCoords.startX} \${lineCoords.startY} C \${lineCoords.startX} \${lineCoords.startY + 150}, \${lineCoords.endX} \${lineCoords.endY - 150}, \${lineCoords.endX} \${lineCoords.endY}\`}
+            d={`M ${lineCoords.startX} ${lineCoords.startY} C ${lineCoords.startX} ${lineCoords.startY + 150}, ${lineCoords.endX} ${lineCoords.endY - 150}, ${lineCoords.endX} ${lineCoords.endY}`}
             fill="none"
             stroke="url(#gradientRed)"
             strokeWidth="5"
@@ -424,7 +424,7 @@ export default function Home() {
           />
 
           <div className="relative group mt-2">
-            <div className={\`absolute -inset-1 rounded-2xl blur-md transition-all duration-1000 \${apiError ? "bg-gradient-to-r from-red-500 to-rose-500 opacity-80 animate-pulse" : "bg-gradient-to-r from-indigo-500 via-purple-500 to-pink-500 opacity-30 group-hover:opacity-70 group-hover:duration-200"}\`}></div>
+            <div className={`absolute -inset-1 rounded-2xl blur-md transition-all duration-1000 ${apiError ? "bg-gradient-to-r from-red-500 to-rose-500 opacity-80 animate-pulse" : "bg-gradient-to-r from-indigo-500 via-purple-500 to-pink-500 opacity-30 group-hover:opacity-70 group-hover:duration-200"}`}></div>
             <input 
               ref={apiKeyInputRef}
               type="password"
